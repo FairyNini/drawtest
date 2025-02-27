@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Community Drawing Page</title>
+  <style>
+    /* Basic styling for layout and typography */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f7f7f7;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    /* Verification and drawing sections */
+    #verify-section, #draw-section {
+      margin-bottom: 20px;
+    }
+    input[type="text"] {
+      padding: 8px;
+      font-size: 16px;
+      width: 200px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .message {
+      margin-top: 10px;
+      font-weight: bold;
+      color: red;
+    }
+    /* Wheel container & pointer styling */
+    #wheel-container {
+      position: relative;
+      margin: 20px auto;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 5px solid #333;
+    }
+    #wheel {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      transition: transform 5s cubic-bezier(0.33, 1, 0.68, 1);
+    }
+    /* Fixed pointer at the top */
+    #pointer {
+      position: absolute;
+      top: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 20px solid transparent;
+      border-right: 20px solid transparent;
+      border-bottom: 20px solid red;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Community Drawing Page</h1>
+    <!-- Verification Section -->
+    <div id="verify-section">
+      <input type="text" id="userIdInput" placeholder="Enter your unique ID">
+      <button id="verifyBtn">Verify Identity</button>
+      <div class="message" id="verifyMsg"></div>
+    </div>
+    <!-- Drawing Section (hidden until verification) -->
+    <div id="draw-section" style="display:none;">
+      <button id="drawBtn">Draw Now</button>
+      <div id="wheel-container">
+        <div id="wheel"></div>
+        <div id="pointer"></div>
+      </div>
+      <div class="message" id="resultMsg"></div>
+    </div>
+  </div>
+
+  <script>
+    /*******************
+     * Sample Data
+     *******************/
+    // In a real application, participant data should be managed server‑side.
+    const participants = {
+      "ABC123": { drawn: false },
+      "XYZ789": { drawn: false },
+      "USER001": { drawn: false }
+    };
+
+    // Sample prize configuration: each prize has a name, probability (out of 100), and available count.
+    let prizes = [
+      { name: "Grand Prize", probability: 10, count: 1 },
+      { name: "Second Prize", probability: 20, count: 2 },
+      { name: "Consolation Prize", probability: 70, count: 5 }
+    ];
+    // Total probability for normalization
+    const totalProb = prizes.reduce((sum, p) => sum + p.probability, 0);
+
+    /*******************
+     * DOM Elements
+     *******************/
+    const userIdInput = document.getElementById('userIdInput');
+    const verifyBtn = document.getElementById('verifyBtn');
+    const verifyMsg = document.getElementById('verifyMsg');
+    const drawSection = document.getElementById('draw-section');
+    const drawBtn = document.getElementById('drawBtn');
+    const wheel = document.getElementById('wheel');
+    const resultMsg = document.getElementById('resultMsg');
+
+    let currentUserId = null;
+    let currentRotation = 0;
+    let spinning = false;
+
+    /*******************
+     * Identity Verification
+     *******************/
+    verifyBtn.addEventListener('click', function() {
+      const inputId = userIdInput.value.trim().toUpperCase();
+      if (!inputId) {
+        verifyMsg.textContent = "Please enter your ID.";
+        return;
+      }
+      if (!(inputId in participants)) {
+        verifyMsg.textContent = "ID not found. Please check your unique ID.";
+        return;
+      }
+      // Check if user already drew (using localStorage for persistence)
+      if (localStorage.getItem("drawn_" + inputId)) {
+        verifyMsg.textContent = "You have already drawn.";
+        return;
+      }
+      currentUserId = inputId;
+      verifyMsg.textContent = "ID verified. Good luck!";
+      document.getElementById('verify-section').style.display = "none";
+      drawSection.style.display = "block";
+      drawBtn.disabled = false;
+      renderWheel(); // Build the wheel based on prize probabilities
+    });
+
+    /*******************
+     * Wheel Rendering Function
+     *******************/
+    function renderWheel() {
+      let gradientParts = [];
+      let startAngle = 0;
+      prizes.forEach(prize => {
+        const angle = (prize.probability / totalProb) * 360;
+        const endAngle = startAngle + angle;
+        const color = getRandomColor();
+        gradientParts.push(`${color} ${startAngle}deg ${endAngle}deg`);
+        startAngle = endAngle;
+      });
+      wheel.style.background = `conic-gradient(${gradientParts.join(", ")})`;
+    }
+
+    // Utility: Generate a random hex color
+    function getRandomColor() {
+      const letters = '0123456789ABCDEF';
+      let color = '#';
+      for (let i = 0; i < 6; i++) {
+        color += letters[Math.floor(Math.random() * 16)];
+      }
+      return color;
+    }
+
+    /*******************
+     * Draw Process
+     *******************/
+    drawBtn.addEventListener('click', function() {
+      if (spinning) return; // Prevent multiple clicks during spin
+      spinning = true;
+      drawBtn.disabled = true;
+      resultMsg.textContent = "";
+      
+      // Filter out prizes that are out of stock
+      const availablePrizes = prizes.filter(p => p.count > 0);
+      if (availablePrizes.length === 0) {
+        resultMsg.textContent = "No prizes left.";
+        spinning = false;
+        return;
+      }
+      
+      // Weighted random selection among available prizes
+      let rand = Math.random() * availablePrizes.reduce((sum, p) => sum + p.probability, 0);
+      let selectedPrize = null;
+      for (let prize of availablePrizes) {
+        rand -= prize.probability;
+        if (rand <= 0) {
+          selectedPrize = prize;
+          break;
+        }
+      }
+      if (!selectedPrize) {
+        selectedPrize = availablePrizes[availablePrizes.length - 1];
+      }
+      
+      // Update prize inventory (decrement count)
+      selectedPrize.count--;
+
+      // Calculate target angle: find the middle of the winning prize's segment
+      let cumulativeAngle = 0;
+      let targetAngle = 0;
+      for (let prize of prizes) {
+        let angle = (prize.probability / totalProb) * 360;
+        if (prize === selectedPrize) {
+          targetAngle = cumulativeAngle + angle / 2;
+          break;
+        }
+        cumulativeAngle += angle;
+      }
+      // The pointer is fixed at the top (0°). We spin the wheel multiple times.
+      const extraSpins = 5;
+      let finalRotation = extraSpins * 360 + (360 - targetAngle);
+      currentRotation += finalRotation;
+      
+      // Animate the wheel spin
+      wheel.style.transform = `rotate(${currentRotation}deg)`;
+      
+      // After the spin animation, display the result and mark the user as drawn.
+      setTimeout(() => {
+        resultMsg.textContent = `Congratulations! You won: ${selectedPrize.name}`;
+        localStorage.setItem("drawn_" + currentUserId, true);
+        spinning = false;
+      }, 5200); // 5.2 seconds to account for the animation
+    });
+  </script>
+</body>
+</html>
