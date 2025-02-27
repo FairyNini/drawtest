@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin - Lottery Setup</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0; padding: 20px;
+    }
+    h1 { margin-top: 0; }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: inline-block;
+      width: 120px;
+      font-weight: bold;
+    }
+    input[type="text"], input[type="number"], textarea {
+      padding: 6px;
+      font-size: 14px;
+      width: 200px;
+    }
+    textarea {
+      height: 100px;
+      width: 300px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .message {
+      margin-top: 15px;
+      font-weight: bold;
+      color: green;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Admin Page</h1>
+
+    <!-- Prize Settings -->
+    <h2>Prize Configuration</h2>
+    <div class="form-group">
+      <label for="prizeAName">Prize A Name:</label>
+      <input type="text" id="prizeAName" value="A">
+    </div>
+    <div class="form-group">
+      <label for="prizeAQty">Prize A Qty:</label>
+      <input type="number" id="prizeAQty" value="1">
+    </div>
+
+    <div class="form-group">
+      <label for="prizeBName">Prize B Name:</label>
+      <input type="text" id="prizeBName" value="B">
+    </div>
+    <div class="form-group">
+      <label for="prizeBQty">Prize B Qty:</label>
+      <input type="number" id="prizeBQty" value="2">
+    </div>
+
+    <div class="form-group">
+      <label for="prizeCName">Prize C Name:</label>
+      <input type="text" id="prizeCName" value="C">
+    </div>
+    <div class="form-group">
+      <label for="prizeCQty">Prize C Qty:</label>
+      <input type="number" id="prizeCQty" value="26">
+    </div>
+
+    <hr>
+
+    <!-- User Settings -->
+    <h2>User Configuration</h2>
+    <p>Enter one user ID per line. Each user can only draw once in this example.</p>
+    <textarea id="userList"></textarea>
+
+    <br>
+    <button id="saveBtn">Save Settings</button>
+    <div class="message" id="saveMsg"></div>
+  </div>
+
+  <script>
+  // On load, try to read existing data from localStorage and fill the form
+  window.addEventListener('DOMContentLoaded', () => {
+    const storedConfig = localStorage.getItem('lotteryConfig');
+    if (storedConfig) {
+      const config = JSON.parse(storedConfig);
+      // Fill in prizes
+      document.getElementById('prizeAName').value = config.prizes[0].name;
+      document.getElementById('prizeAQty').value = config.prizes[0].qty;
+      document.getElementById('prizeBName').value = config.prizes[1].name;
+      document.getElementById('prizeBQty').value = config.prizes[1].qty;
+      document.getElementById('prizeCName').value = config.prizes[2].name;
+      document.getElementById('prizeCQty').value = config.prizes[2].qty;
+
+      // Fill in user list
+      const userLines = config.users.map(u => u.id).join('\n');
+      document.getElementById('userList').value = userLines;
+    }
+  });
+
+  document.getElementById('saveBtn').addEventListener('click', () => {
+    // Collect data from form
+    const pAName = document.getElementById('prizeAName').value.trim();
+    const pAQty = parseInt(document.getElementById('prizeAQty').value, 10) || 0;
+    const pBName = document.getElementById('prizeBName').value.trim();
+    const pBQty = parseInt(document.getElementById('prizeBQty').value, 10) || 0;
+    const pCName = document.getElementById('prizeCName').value.trim();
+    const pCQty = parseInt(document.getElementById('prizeCQty').value, 10) || 0;
+
+    const userLines = document.getElementById('userList').value.trim().split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    // Build config object
+    const config = {
+      prizes: [
+        { name: pAName, qty: pAQty },
+        { name: pBName, qty: pBQty },
+        { name: pCName, qty: pCQty },
+      ],
+      users: userLines.map(uid => ({
+        id: uid,
+        maxDraws: 1,
+        usedDraws: 0
+      }))
+    };
+
+    // Save to localStorage
+    localStorage.setItem('lotteryConfig', JSON.stringify(config));
+
+    document.getElementById('saveMsg').textContent = 'Settings saved!';
+    setTimeout(() => {
+      document.getElementById('saveMsg').textContent = '';
+    }, 2000);
+  });
+  </script>
+</body>
+</html>
