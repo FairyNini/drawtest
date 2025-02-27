@@ -206,7 +206,7 @@
   }
 
   /*****************************************************
-   * 3) SPIN THE POINTER
+   * 3) SPIN THE POINTER (2-3 SECONDS)
    *****************************************************/
   const pointer = document.getElementById("pointer");
   const drawBtn = document.getElementById("drawBtn");
@@ -230,8 +230,8 @@
     const extraSpins = Math.floor(Math.random() * 4) + 3; // 3,4,5,6
     const finalAngle = extraSpins * 360 + randomAngle;
 
-    // 4) Spin for 5..10 seconds
-    const spinDuration = 2000 + Math.random() * 3000; // 5,000..10,000 ms
+    // 4) Spin for 2..3 seconds
+    const spinDuration = 2000 + Math.random() * 1000; // 2,000..3,000 ms
     const startTime = performance.now();
 
     requestAnimationFrame(function animate(now) {
