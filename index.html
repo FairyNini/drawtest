@@ -103,16 +103,23 @@
 
   <script>
     /*******************
-     * Sample Data
+     * Participants & Draw Limits
      *******************/
-    // In a real application, participant data should be managed server-side.
+    /*
+      Each participant can draw up to 'maxDraws' times.
+      Adjust 'maxDraws' as needed for your testing or event.
+    */
     const participants = {
-      "ABC123": { drawn: false },
-      "XYZ789": { drawn: false },
-      "USER001": { drawn: false }
+      "ABC123": { maxDraws: 2 },
+      "XYZ789": { maxDraws: 3 },
+      "USER001": { maxDraws: 5 }
     };
 
-    // Three prizes: 1st Prize (10%), 2nd Prize (30%), 3rd Prize (60%).
+    /*******************
+     * Prize Data
+     *******************/
+    // Three prizes with probabilities: 10%, 30%, 60%.
+    // You can adjust 'count' to control how many of each are available.
     let prizes = [
       { name: "1st Prize", probability: 10, count: 1 },
       { name: "2nd Prize", probability: 30, count: 2 },
@@ -149,11 +156,22 @@
         verifyMsg.textContent = "ID not found. Please check your unique ID.";
         return;
       }
-      // Check if user already drew (using localStorage for persistence)
-      if (localStorage.getItem("drawn_" + inputId)) {
-        verifyMsg.textContent = "You have already drawn.";
+
+      // Check how many draws the user has already used (store in localStorage)
+      if (localStorage.getItem("drawCount_" + inputId) === null) {
+        // If user has never drawn on this browser, initialize to 0
+        localStorage.setItem("drawCount_" + inputId, "0");
+      }
+      const userDraws = parseInt(localStorage.getItem("drawCount_" + inputId), 10);
+      const userMax = participants[inputId].maxDraws;
+
+      // If the user has already used all their draws, disallow further attempts
+      if (userDraws >= userMax) {
+        verifyMsg.textContent = `You have used all your draws (${userMax}).`;
         return;
       }
+
+      // Otherwise, proceed to drawing page
       currentUserId = inputId;
       verifyMsg.textContent = "ID verified. Good luck!";
       document.getElementById('verify-section').style.display = "none";
@@ -188,15 +206,14 @@
 
         // Position the label at the midpoint angle of the slice
         // 1) rotate by labelAngle so it points to the correct slice
-        // 2) translate out from center (e.g. 140px) so it sits near the rim
+        // 2) translate out from center so it sits near the rim
         // 3) rotate back by -labelAngle so the text is upright
-        label.style.transform = `translate(-50%, -50%) 
-                                 rotate(${labelAngle}deg) 
-                                 translate(140px) 
+        label.style.transform = `translate(-50%, -50%)
+                                 rotate(${labelAngle}deg)
+                                 translate(140px)
                                  rotate(-${labelAngle}deg)`;
 
         wheel.appendChild(label);
-
         startAngle = endAngle;
       });
 
@@ -241,6 +258,7 @@
           break;
         }
       }
+      // Fallback if random logic didn't pick earlier (edge case)
       if (!selectedPrize) {
         selectedPrize = availablePrizes[availablePrizes.length - 1];
       }
@@ -267,10 +285,14 @@
       // Animate the wheel spin
       wheel.style.transform = `rotate(${currentRotation}deg)`;
       
-      // After the spin animation, display the result and mark the user as drawn.
+      // After the spin animation, display the result and update user draws
       setTimeout(() => {
         resultMsg.textContent = `Congratulations! You won: ${selectedPrize.name}`;
-        localStorage.setItem("drawn_" + currentUserId, true);
+
+        // Increment the user's draw count
+        const userDraws = parseInt(localStorage.getItem("drawCount_" + currentUserId), 10);
+        localStorage.setItem("drawCount_" + currentUserId, userDraws + 1);
+
         spinning = false;
       }, 5200); // 5.2 seconds to account for the animation
     });
