@@ -1,10 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Community Drawing Page</title>
   <style>
-    /* Basic styling for layout and typography */
     body {
       font-family: Arial, sans-serif;
       background-color: #f7f7f7;
@@ -12,6 +11,7 @@
       margin: 0;
       padding: 20px;
     }
+
     .container {
       max-width: 600px;
       margin: auto;
@@ -20,26 +20,12 @@
       border-radius: 8px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-    /* Verification and drawing sections */
-    #verify-section, #draw-section {
-      margin-bottom: 20px;
+
+    h1 {
+      margin-top: 0;
     }
-    input[type="text"] {
-      padding: 8px;
-      font-size: 16px;
-      width: 200px;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    .message {
-      margin-top: 10px;
-      font-weight: bold;
-      color: red;
-    }
-    /* Wheel container & pointer styling */
+
+    /* The Wheel (static) */
     #wheel-container {
       position: relative;
       margin: 20px auto;
@@ -50,25 +36,13 @@
       border: 5px solid #333;
     }
     #wheel {
+      /* A static conic gradient that won't rotate */
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      transition: transform 5s cubic-bezier(0.33, 1, 0.68, 1);
-      position: relative; /* So we can absolutely position labels inside */
+      position: relative;
     }
-    /* Fixed pointer at the top */
-    #pointer {
-      position: absolute;
-      top: -20px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 0;
-      height: 0;
-      border-left: 20px solid transparent;
-      border-right: 20px solid transparent;
-      border-bottom: 20px solid red;
-      z-index: 10;
-    }
+
     /* Prize labels inside each slice */
     .wheel-label {
       position: absolute;
@@ -79,222 +53,236 @@
       font-weight: bold;
       white-space: nowrap;
     }
+
+    /* The pointer that spins */
+    #pointer {
+      position: absolute;
+      width: 200px;         /* Adjust to taste */
+      height: 200px;        /* Adjust to taste */
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%) rotate(0deg);
+      transform-origin: 50% 50%; /* center of pointer */
+      pointer-events: none; /* don't interfere with clicks */
+    }
+    /* A simple arrow shape for the pointer */
+    #pointer::before {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -90%);
+      width: 0;
+      height: 0;
+      border-left: 15px solid transparent;
+      border-right: 15px solid transparent;
+      border-bottom: 40px solid red; /* arrow color */
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .message {
+      margin-top: 10px;
+      font-weight: bold;
+      color: green;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Community Drawing Page</h1>
-    <!-- Verification Section -->
-    <div id="verify-section">
-      <input type="text" id="userIdInput" placeholder="Enter your unique ID">
-      <button id="verifyBtn">Verify Identity</button>
-      <div class="message" id="verifyMsg"></div>
+    <button id="drawBtn">Draw Now</button>
+    <div id="wheel-container">
+      <!-- The static wheel -->
+      <div id="wheel"></div>
+      <!-- The spinning pointer -->
+      <div id="pointer"></div>
     </div>
-    <!-- Drawing Section (hidden until verification) -->
-    <div id="draw-section" style="display:none;">
-      <button id="drawBtn">Draw Now</button>
-      <div id="wheel-container">
-        <div id="wheel"></div>
-        <div id="pointer"></div>
-      </div>
-      <div class="message" id="resultMsg"></div>
-    </div>
+    <div class="message" id="resultMsg"></div>
   </div>
 
   <script>
-    /*******************
-     * Participants & Draw Limits
-     *******************/
-    /*
-      Each participant can draw up to 'maxDraws' times.
-      Adjust 'maxDraws' as needed for your testing or event.
-    */
-    const participants = {
-      "ABC123": { maxDraws: 2 },
-      "XYZ789": { maxDraws: 3 },
-      "USER001": { maxDraws: 5 }
-    };
-
-    /*******************
-     * Prize Data
-     *******************/
-    // Three prizes with probabilities: 10%, 30%, 60%.
-    // You can adjust 'count' to control how many of each are available.
-    let prizes = [
-      { name: "1st Prize", probability: 10, count: 1 },
-      { name: "2nd Prize", probability: 30, count: 2 },
-      { name: "3rd Prize", probability: 60, count: 5 }
+    /************************************************
+     * PRIZE & PROBABILITY CONFIG
+     ************************************************/
+    const prizes = [
+      { name: "1st Prize", probability: 10 },
+      { name: "2nd Prize", probability: 30 },
+      { name: "3rd Prize", probability: 60 },
     ];
-    // Total probability for normalization
     const totalProb = prizes.reduce((sum, p) => sum + p.probability, 0);
 
-    /*******************
-     * DOM Elements
-     *******************/
-    const userIdInput = document.getElementById('userIdInput');
-    const verifyBtn = document.getElementById('verifyBtn');
-    const verifyMsg = document.getElementById('verifyMsg');
-    const drawSection = document.getElementById('draw-section');
-    const drawBtn = document.getElementById('drawBtn');
-    const wheel = document.getElementById('wheel');
-    const resultMsg = document.getElementById('resultMsg');
-
-    let currentUserId = null;
-    let currentRotation = 0;
-    let spinning = false;
-
-    /*******************
-     * Identity Verification
-     *******************/
-    verifyBtn.addEventListener('click', function() {
-      const inputId = userIdInput.value.trim().toUpperCase();
-      if (!inputId) {
-        verifyMsg.textContent = "Please enter your ID.";
-        return;
-      }
-      if (!(inputId in participants)) {
-        verifyMsg.textContent = "ID not found. Please check your unique ID.";
-        return;
-      }
-
-      // Check how many draws the user has already used (store in localStorage)
-      if (localStorage.getItem("drawCount_" + inputId) === null) {
-        // If user has never drawn on this browser, initialize to 0
-        localStorage.setItem("drawCount_" + inputId, "0");
-      }
-      const userDraws = parseInt(localStorage.getItem("drawCount_" + inputId), 10);
-      const userMax = participants[inputId].maxDraws;
-
-      // If the user has already used all their draws, disallow further attempts
-      if (userDraws >= userMax) {
-        verifyMsg.textContent = `You have used all your draws (${userMax}).`;
-        return;
-      }
-
-      // Otherwise, proceed to drawing page
-      currentUserId = inputId;
-      verifyMsg.textContent = "ID verified. Good luck!";
-      document.getElementById('verify-section').style.display = "none";
-      drawSection.style.display = "block";
-      drawBtn.disabled = false;
-      renderWheel(); // Build the wheel based on prize probabilities
-    });
-
-    /*******************
-     * Wheel Rendering Function
-     *******************/
+    /************************************************
+     * RENDER THE STATIC WHEEL (CONIC GRADIENT + LABELS)
+     ************************************************/
+    const wheel = document.getElementById("wheel");
     function renderWheel() {
-      // Clear any old labels before redrawing
-      wheel.innerHTML = "";
+      wheel.innerHTML = ""; // Clear old labels if any
 
-      let gradientParts = [];
       let startAngle = 0;
+      let gradientParts = [];
 
-      prizes.forEach(prize => {
-        const angle = (prize.probability / totalProb) * 360;
-        const endAngle = startAngle + angle;
+      prizes.forEach((prize) => {
+        const sliceAngle = (prize.probability / totalProb) * 360;
+        const endAngle = startAngle + sliceAngle;
+
+        // Random color for each slice
         const color = getRandomColor();
-
-        // Build the conic-gradient part
         gradientParts.push(`${color} ${startAngle}deg ${endAngle}deg`);
 
-        // Create a label for this slice
-        const labelAngle = startAngle + angle / 2;
-        const label = document.createElement('div');
-        label.className = 'wheel-label';
-        label.textContent = prize.name;
-
-        // Position the label at the midpoint angle of the slice
-        // 1) rotate by labelAngle so it points to the correct slice
-        // 2) translate out from center so it sits near the rim
-        // 3) rotate back by -labelAngle so the text is upright
-        label.style.transform = `translate(-50%, -50%)
-                                 rotate(${labelAngle}deg)
-                                 translate(140px)
-                                 rotate(-${labelAngle}deg)`;
-
+        // Create a label at the midpoint
+        const labelAngle = startAngle + sliceAngle / 2;
+        const label = document.createElement("div");
+        label.className = "wheel-label";
+        // Show prize name + probability
+        label.textContent = `${prize.name} (${prize.probability}%)`;
+        // Position it
+        label.style.transform = `
+          translate(-50%, -50%)
+          rotate(${labelAngle}deg)
+          translate(140px)
+          rotate(-${labelAngle}deg)
+        `;
         wheel.appendChild(label);
+
         startAngle = endAngle;
       });
 
-      // Apply the gradient to the wheel background
+      // Apply conic gradient
       wheel.style.background = `conic-gradient(${gradientParts.join(", ")})`;
     }
 
-    // Utility: Generate a random hex color
     function getRandomColor() {
-      const letters = '0123456789ABCDEF';
-      let color = '#';
+      const letters = "0123456789ABCDEF";
+      let color = "#";
       for (let i = 0; i < 6; i++) {
         color += letters[Math.floor(Math.random() * 16)];
       }
       return color;
     }
 
-    /*******************
-     * Draw Process
-     *******************/
-    drawBtn.addEventListener('click', function() {
-      if (spinning) return; // Prevent multiple clicks during spin
+    renderWheel(); // Draw the slices once on load
+
+    /************************************************
+     * SELECT A PRIZE (WEIGHTED RANDOM)
+     ************************************************/
+    function selectPrize() {
+      const rand = Math.random() * totalProb;
+      let sum = 0;
+      for (let i = 0; i < prizes.length; i++) {
+        sum += prizes[i].probability;
+        if (rand <= sum) {
+          return i; // index of the chosen prize
+        }
+      }
+      // fallback
+      return prizes.length - 1;
+    }
+
+    /************************************************
+     * CALCULATE THE MIDDLE ANGLE OF A PRIZE SLICE
+     ************************************************/
+    function getPrizeMiddleAngle(prizeIndex) {
+      let startAngle = 0;
+      for (let i = 0; i < prizeIndex; i++) {
+        startAngle += (prizes[i].probability / totalProb) * 360;
+      }
+      const sliceAngle = (prizes[prizeIndex].probability / totalProb) * 360;
+      return startAngle + sliceAngle / 2;
+    }
+
+    /************************************************
+     * SPIN THE POINTER (DECELERATION ANIMATION)
+     ************************************************/
+    const pointer = document.getElementById("pointer");
+    let spinning = false;
+
+    function spinPointer(finalAngle) {
       spinning = true;
-      drawBtn.disabled = true;
+      let currentAngle = 0;
+      // Some random extra full spins (so user sees pointer spin multiple times)
+      const extraSpins = Math.floor(Math.random() * 3) + 3; // between 3 and 5
+      const targetAngle = extraSpins * 360 + finalAngle;
+
+      // Animation variables
+      let velocity = 40; // degrees/frame or so
+      let deceleration = 0.2; // how quickly it slows
+
+      function animate() {
+        const remaining = targetAngle - currentAngle;
+        if (remaining > 0) {
+          // Move by velocity or whatever is left if smaller
+          if (remaining > velocity) {
+            currentAngle += velocity;
+            velocity -= deceleration;
+            if (velocity < 0.5) velocity = 0.5; // don't let it slow too much
+          } else {
+            // If what's left is less than velocity, just jump to final
+            currentAngle = targetAngle;
+          }
+          pointer.style.transform = `translate(-50%, -50%) rotate(${currentAngle}deg)`;
+          requestAnimationFrame(animate);
+        } else {
+          // Done spinning
+          spinning = false;
+          showResult(finalAngle);
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+
+    /************************************************
+     * SHOW RESULT: DETERMINE WHICH PRIZE THE POINTER
+     * ACTUALLY LANDED ON (0° at top, so invert logic).
+     *
+     * Because we are rotating the pointer, the "winning"
+     * slice is basically the slice at 0° on the wheel.
+     * But we've forced the pointer to land at finalAngle
+     * which corresponds to the chosen prize's midpoint.
+     ************************************************/
+    function showResult(finalSliceAngle) {
+      const resultMsg = document.getElementById("resultMsg");
+      // We already know which prize was chosen by the random selection,
+      // so let's find that in the code that called spinPointer().
+      // But for completeness, you could also compute from finalSliceAngle.
+
+      // This example just sets the message in spinPointer() after we pick the prize.
+      // See the "drawBtn" click handler below.
+      // Or you can do a more direct approach if needed.
+    }
+
+    /************************************************
+     * BUTTON CLICK HANDLER
+     ************************************************/
+    const drawBtn = document.getElementById("drawBtn");
+    const resultMsg = document.getElementById("resultMsg");
+
+    drawBtn.addEventListener("click", function() {
+      if (spinning) return; // Prevent double-clicks
       resultMsg.textContent = "";
-      
-      // Filter out prizes that are out of stock
-      const availablePrizes = prizes.filter(p => p.count > 0);
-      if (availablePrizes.length === 0) {
-        resultMsg.textContent = "No prizes left.";
-        spinning = false;
-        return;
-      }
-      
-      // Weighted random selection among available prizes
-      let rand = Math.random() * availablePrizes.reduce((sum, p) => sum + p.probability, 0);
-      let selectedPrize = null;
-      for (let prize of availablePrizes) {
-        rand -= prize.probability;
-        if (rand <= 0) {
-          selectedPrize = prize;
-          break;
-        }
-      }
-      // Fallback if random logic didn't pick earlier (edge case)
-      if (!selectedPrize) {
-        selectedPrize = availablePrizes[availablePrizes.length - 1];
-      }
-      
-      // Update prize inventory (decrement count)
-      selectedPrize.count--;
 
-      // Calculate target angle: find the middle of the winning prize's segment
-      let cumulativeAngle = 0;
-      let targetAngle = 0;
-      for (let prize of prizes) {
-        let sliceAngle = (prize.probability / totalProb) * 360;
-        if (prize === selectedPrize) {
-          targetAngle = cumulativeAngle + sliceAngle / 2;
-          break;
-        }
-        cumulativeAngle += sliceAngle;
-      }
-      // The pointer is fixed at the top (0°). We spin the wheel multiple times.
-      const extraSpins = 5;
-      let finalRotation = extraSpins * 360 + (360 - targetAngle);
-      currentRotation += finalRotation;
-      
-      // Animate the wheel spin
-      wheel.style.transform = `rotate(${currentRotation}deg)`;
-      
-      // After the spin animation, display the result and update user draws
+      // 1) Weighted random to pick which prize
+      const chosenIndex = selectPrize();
+      const chosenPrize = prizes[chosenIndex];
+
+      // 2) Figure out the midpoint angle of that slice
+      const angle = getPrizeMiddleAngle(chosenIndex);
+
+      // 3) Spin the pointer to that angle
+      spinPointer(angle);
+
+      // 4) After the spin completes, we can show the result
       setTimeout(() => {
-        resultMsg.textContent = `Congratulations! You won: ${selectedPrize.name}`;
-
-        // Increment the user's draw count
-        const userDraws = parseInt(localStorage.getItem("drawCount_" + currentUserId), 10);
-        localStorage.setItem("drawCount_" + currentUserId, userDraws + 1);
-
-        spinning = false;
-      }, 5200); // 5.2 seconds to account for the animation
+        if (!spinning) {
+          resultMsg.textContent = `Congratulations! You won: ${chosenPrize.name}`;
+        }
+      }, 6000); 
+      // 6s is enough for typical spin durations in this code
+      // You could also detect the spin end in showResult() and set the text there.
     });
   </script>
 </body>
