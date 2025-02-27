@@ -54,6 +54,7 @@
       height: 100%;
       border-radius: 50%;
       transition: transform 5s cubic-bezier(0.33, 1, 0.68, 1);
+      position: relative; /* So we can absolutely position labels inside */
     }
     /* Fixed pointer at the top */
     #pointer {
@@ -67,6 +68,16 @@
       border-right: 20px solid transparent;
       border-bottom: 20px solid red;
       z-index: 10;
+    }
+    /* Prize labels inside each slice */
+    .wheel-label {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform-origin: center;
+      font-size: 14px;
+      font-weight: bold;
+      white-space: nowrap;
     }
   </style>
 </head>
@@ -94,18 +105,18 @@
     /*******************
      * Sample Data
      *******************/
-    // In a real application, participant data should be managed server‑side.
+    // In a real application, participant data should be managed server-side.
     const participants = {
       "ABC123": { drawn: false },
       "XYZ789": { drawn: false },
       "USER001": { drawn: false }
     };
 
-    // Sample prize configuration: each prize has a name, probability (out of 100), and available count.
+    // Three prizes: 1st Prize (10%), 2nd Prize (30%), 3rd Prize (60%).
     let prizes = [
-      { name: "Grand Prize", probability: 10, count: 1 },
-      { name: "Second Prize", probability: 20, count: 2 },
-      { name: "Consolation Prize", probability: 70, count: 5 }
+      { name: "1st Prize", probability: 10, count: 1 },
+      { name: "2nd Prize", probability: 30, count: 2 },
+      { name: "3rd Prize", probability: 60, count: 5 }
     ];
     // Total probability for normalization
     const totalProb = prizes.reduce((sum, p) => sum + p.probability, 0);
@@ -155,15 +166,41 @@
      * Wheel Rendering Function
      *******************/
     function renderWheel() {
+      // Clear any old labels before redrawing
+      wheel.innerHTML = "";
+
       let gradientParts = [];
       let startAngle = 0;
+
       prizes.forEach(prize => {
         const angle = (prize.probability / totalProb) * 360;
         const endAngle = startAngle + angle;
         const color = getRandomColor();
+
+        // Build the conic-gradient part
         gradientParts.push(`${color} ${startAngle}deg ${endAngle}deg`);
+
+        // Create a label for this slice
+        const labelAngle = startAngle + angle / 2;
+        const label = document.createElement('div');
+        label.className = 'wheel-label';
+        label.textContent = prize.name;
+
+        // Position the label at the midpoint angle of the slice
+        // 1) rotate by labelAngle so it points to the correct slice
+        // 2) translate out from center (e.g. 140px) so it sits near the rim
+        // 3) rotate back by -labelAngle so the text is upright
+        label.style.transform = `translate(-50%, -50%) 
+                                 rotate(${labelAngle}deg) 
+                                 translate(140px) 
+                                 rotate(-${labelAngle}deg)`;
+
+        wheel.appendChild(label);
+
         startAngle = endAngle;
       });
+
+      // Apply the gradient to the wheel background
       wheel.style.background = `conic-gradient(${gradientParts.join(", ")})`;
     }
 
@@ -215,12 +252,12 @@
       let cumulativeAngle = 0;
       let targetAngle = 0;
       for (let prize of prizes) {
-        let angle = (prize.probability / totalProb) * 360;
+        let sliceAngle = (prize.probability / totalProb) * 360;
         if (prize === selectedPrize) {
-          targetAngle = cumulativeAngle + angle / 2;
+          targetAngle = cumulativeAngle + sliceAngle / 2;
           break;
         }
-        cumulativeAngle += angle;
+        cumulativeAngle += sliceAngle;
       }
       // The pointer is fixed at the top (0°). We spin the wheel multiple times.
       const extraSpins = 5;
