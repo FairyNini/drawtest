@@ -8,36 +8,19 @@
       font-family: Arial, sans-serif;
       background-color: #f7f7f7;
       text-align: center;
-      margin: 0; padding: 20px;
+      margin: 0;
+      padding: 20px;
     }
     .container {
-      max-width: 800px;
+      max-width: 800px; /* widened a bit to fit wheel + legend side by side */
       margin: auto;
       background: #fff;
       padding: 20px;
       border-radius: 8px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
-    h1 { margin-top: 0; }
-    .message { margin-top: 10px; font-weight: bold; color: green; }
-
-    #verify-section, #draw-section {
-      margin-top: 20px;
-    }
-    input[type="text"] {
-      padding: 6px;
-      font-size: 14px;
-      width: 200px;
-    }
-    button {
-      padding: 8px 16px;
-      font-size: 14px;
-      cursor: pointer;
-      margin-top: 10px;
-    }
-    #verifyMsg {
-      color: red;
-      margin-top: 10px;
+    h1 {
+      margin-top: 0;
     }
 
     /* Layout for wheel + legend side by side */
@@ -58,20 +41,24 @@
       overflow: hidden;
       border: 5px solid #333;
     }
+    /* The wheel (static) with conic gradient */
     #wheel {
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      position: relative;
+      position: relative; /* so we can layer pointer on top */
     }
+
+    /* The black pointer (triangle) that spins from the center outward */
     #pointer {
       position: absolute;
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%) rotate(0deg);
       transform-origin: 50% 50%;
-      pointer-events: none;
+      pointer-events: none; /* so clicks go through it */
     }
+    /* Make the pointer a tall black triangle */
     #pointer::before {
       content: "";
       position: absolute;
@@ -79,7 +66,7 @@
       top: 0;
       border-left: 10px solid transparent;
       border-right: 10px solid transparent;
-      border-bottom: 180px solid black;
+      border-bottom: 180px solid black; /* ~180px from center to edge */
       transform: translate(-50%, -100%);
     }
 
@@ -92,143 +79,113 @@
       text-align: left;
       min-width: 120px;
     }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .legend-color-box {
+      width: 16px;
+      height: 16px;
+      margin-right: 8px;
+      border: 1px solid #333;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .message {
+      margin-top: 10px;
+      font-weight: bold;
+      color: green;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Lottery Draw</h1>
+    <button id="drawBtn">Draw Now</button>
 
-    <!-- Section 1: Verify user ID -->
-    <div id="verify-section">
-      <input type="text" id="userIdInput" placeholder="Enter your ID">
-      <button id="verifyBtn">Verify</button>
-      <div id="verifyMsg"></div>
-    </div>
-
-    <!-- Section 2: The draw (hidden until verified) -->
-    <div id="draw-section" style="display:none;">
-      <!-- Wheel + legend side by side -->
-      <div class="layout">
-        <div>
-          <!-- The wheel -->
-          <div id="wheel-container">
-            <div id="wheel"></div>
-            <div id="pointer"></div>
-          </div>
-          <!-- Draw button + result message -->
-          <button id="drawBtn">Draw Now</button>
-          <div class="message" id="resultMsg"></div>
+    <!-- Flex container: wheel on the left, legend on the right -->
+    <div class="layout">
+      <div>
+        <!-- Wheel container -->
+        <div id="wheel-container">
+          <div id="wheel"></div>
+          <div id="pointer"></div>
         </div>
-        <!-- The legend for remaining gifts -->
-        <div id="legend"></div>
+        <!-- Result message below wheel -->
+        <div class="message" id="resultMsg"></div>
       </div>
+
+      <!-- Legend -->
+      <div id="legend"></div>
     </div>
   </div>
 
   <script>
-  // Global config loaded from localStorage
-  let config = null;
-  let userObj = null; // The currently verified user
+  /*****************************************************
+   * 1) PRIZE CONFIGURATION
+   *****************************************************/
+  const prizes = [
+    { name: "联想笔记本", probability: 10 },
+    { name: "联想pad", probability: 20 },
+    { name: "联想双肩背", probability: 30 },
+    { name: "谢谢参与", probability: 40 },
+  ];
+  const totalProb = prizes.reduce((sum, p) => sum + p.probability, 0);
 
-  // On page load, read config
-  window.addEventListener('DOMContentLoaded', () => {
-    const raw = localStorage.getItem('lotteryConfig');
-    if (!raw) {
-      alert("No admin config found. Please set up admin.html first!");
-      return;
-    }
-    config = JSON.parse(raw);
-    // Render the initial wheel and legend
-    renderWheel();
-    renderLegend();
+  /*****************************************************
+   * 2) BUILD THE WHEEL SLICES & LEGEND
+   *****************************************************/
+  const wheel = document.getElementById("wheel");
+  const legend = document.getElementById("legend");
+
+  const slices = [];
+  let currentStartAngle = 0;
+  let gradientParts = [];
+
+  prizes.forEach(prize => {
+    const sliceAngle = (prize.probability / totalProb) * 360;
+    const sliceColor = getNonBlackColor();
+    const sliceStart = currentStartAngle;
+    const sliceEnd = sliceStart + sliceAngle;
+
+    slices.push({
+      startAngle: sliceStart,
+      endAngle: sliceEnd,
+      color: sliceColor,
+      name: prize.name,
+      probability: prize.probability
+    });
+
+    gradientParts.push(`${sliceColor} ${sliceStart}deg ${sliceEnd}deg`);
+    currentStartAngle = sliceEnd;
   });
 
-  // 1) Verify user
-  const userIdInput = document.getElementById('userIdInput');
-  const verifyBtn = document.getElementById('verifyBtn');
-  const verifyMsg = document.getElementById('verifyMsg');
-  const drawSection = document.getElementById('draw-section');
+  // Apply conic gradient to wheel
+  wheel.style.background = `conic-gradient(${gradientParts.join(", ")})`;
 
-  verifyBtn.addEventListener('click', () => {
-    const uid = userIdInput.value.trim();
-    if (!uid) {
-      verifyMsg.textContent = "Please enter a valid ID.";
-      return;
-    }
-    // Find user in config
-    const foundUser = config.users.find(u => u.id === uid);
-    if (!foundUser) {
-      verifyMsg.textContent = "User not found. Please check your ID.";
-      return;
-    }
-    // Check if user can still draw
-    if (foundUser.usedDraws >= foundUser.maxDraws) {
-      verifyMsg.textContent = "You have no draws left.";
-      return;
-    }
-    // OK
-    userObj = foundUser;
-    verifyMsg.textContent = "Verification successful!";
-    document.getElementById('verify-section').style.display = 'none';
-    drawSection.style.display = 'block';
+  // Build legend
+  legend.innerHTML = "";
+  slices.forEach(slice => {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    const colorBox = document.createElement("div");
+    colorBox.className = "legend-color-box";
+    colorBox.style.backgroundColor = slice.color;
+    const label = document.createElement("span");
+    label.textContent = `${slice.name} (${slice.probability}%)`;
+    item.appendChild(colorBox);
+    item.appendChild(label);
+    legend.appendChild(item);
   });
 
-  // 2) Render wheel based on current stock
-  const wheel = document.getElementById('wheel');
-  let slices = []; // array of {startAngle, endAngle, color, prizeName}
-
-  function renderWheel() {
-    if (!config) return;
-    const totalRemaining = config.prizes.reduce((sum, p) => sum + p.qty, 0);
-    if (totalRemaining <= 0) {
-      wheel.style.background = "#ccc";
-      slices = [];
-      return;
-    }
-    let currentStart = 0;
-    let gradientParts = [];
-    slices = [];
-
-    // Build slices from current stock
-    config.prizes.forEach(prize => {
-      if (prize.qty > 0) {
-        const sliceAngle = (prize.qty / totalRemaining) * 360;
-        const sliceStart = currentStart;
-        const sliceEnd = sliceStart + sliceAngle;
-        const color = getNonBlackColor();
-        slices.push({
-          startAngle: sliceStart,
-          endAngle: sliceEnd,
-          color: color,
-          prizeName: prize.name
-        });
-        gradientParts.push(`${color} ${sliceStart}deg ${sliceEnd}deg`);
-        currentStart = sliceEnd;
-      }
-    });
-    wheel.style.background = `conic-gradient(${gradientParts.join(", ")})`;
-  }
-
-  // Legend: show each prize + remaining + total
-  function renderLegend() {
-    const legend = document.getElementById('legend');
-    if (!config) {
-      legend.innerHTML = "";
-      return;
-    }
-    let total = 0;
-    config.prizes.forEach(p => total += p.qty);
-
-    let html = "<h2>Remaining Gifts</h2>";
-    config.prizes.forEach(p => {
-      html += `<div>${p.name}: ${p.qty}</div>`;
-    });
-    html += `<div style="margin-top:10px;font-weight:bold;">Total: ${total}</div>`;
-
-    legend.innerHTML = html;
-  }
-
-  // Non-black color generator
+  /**
+   * Return a random hex color that isn't black (#000000).
+   */
   function getNonBlackColor() {
     let c;
     do {
@@ -236,6 +193,10 @@
     } while (c.toLowerCase() === "#000000");
     return c;
   }
+
+  /**
+   * Return a random #RRGGBB color.
+   */
   function getRandomColor() {
     const letters = "0123456789ABCDEF";
     let color = "#";
@@ -245,37 +206,33 @@
     return color;
   }
 
-  // 3) Spin logic
-  const pointer = document.getElementById('pointer');
-  const drawBtn = document.getElementById('drawBtn');
-  const resultMsg = document.getElementById('resultMsg');
+  /*****************************************************
+   * 3) SPIN THE POINTER (2-3 SECONDS)
+   *****************************************************/
+  const pointer = document.getElementById("pointer");
+  const drawBtn = document.getElementById("drawBtn");
+  const resultMsg = document.getElementById("resultMsg");
   let spinning = false;
 
-  drawBtn.addEventListener('click', () => {
+  drawBtn.addEventListener("click", () => {
     if (spinning) return;
-    if (!config) return;
-
-    // Check if any prizes left
-    const totalRemaining = config.prizes.reduce((sum, p) => sum + p.qty, 0);
-    if (totalRemaining <= 0) {
-      resultMsg.textContent = "No prizes left.";
-      return;
-    }
     spinning = true;
     resultMsg.textContent = "";
 
-    // Weighted random angle
-    const randomAngle = pickRandomAngleFromStock();
-    // Which slice?
-    const chosenSlice = slices.find(s => randomAngle >= s.startAngle && randomAngle < s.endAngle)
-                        || slices[slices.length - 1];
+    // 1) Pick random angle [0..360)
+    const randomAngle = Math.random() * 360;
 
-    // Extra spins (3..6)
-    const extraSpins = Math.floor(Math.random() * 4) + 3;
+    // 2) Determine which slice it lands on
+    const chosenSlice = slices.find(slice =>
+      randomAngle >= slice.startAngle && randomAngle < slice.endAngle
+    ) || slices[slices.length - 1];
+
+    // 3) Add random extra spins (3..6 full turns)
+    const extraSpins = Math.floor(Math.random() * 4) + 3; // 3,4,5,6
     const finalAngle = extraSpins * 360 + randomAngle;
 
-    // 2..3 second spin
-    const spinDuration = 2000 + Math.random() * 1000;
+    // 4) Spin for 2..3 seconds
+    const spinDuration = 2000 + Math.random() * 1000; // 2,000..3,000 ms
     const startTime = performance.now();
 
     requestAnimationFrame(function animate(now) {
@@ -283,7 +240,7 @@
       let progress = elapsed / spinDuration;
       if (progress > 1) progress = 1;
 
-      // ease-out
+      // Ease-out (quadratic): 1 - (1 - t)^2
       const eased = 1 - Math.pow(1 - progress, 2);
       const currentAngle = eased * finalAngle;
       pointer.style.transform = `translate(-50%, -50%) rotate(${currentAngle}deg)`;
@@ -291,82 +248,13 @@
       if (progress < 1) {
         requestAnimationFrame(animate);
       } else {
-        // done
+        // Spin done
         spinning = false;
-        awardPrize(chosenSlice.prizeName);
+        resultMsg.textContent = `Congratulations! You won: ${chosenSlice.name}`;
       }
     });
   });
-
-  // Weighted random angle: pick a random prize by stock
-  function pickRandomAngleFromStock() {
-    const totalRemaining = config.prizes.reduce((sum, p) => sum + p.qty, 0);
-    let rand = Math.floor(Math.random() * totalRemaining) + 1; // 1..totalRemaining
-    for (let p of config.prizes) {
-      if (p.qty <= 0) continue;
-      if (rand <= p.qty) {
-        // pick this prize
-        const slice = slices.find(s => s.prizeName === p.name);
-        const angleSize = slice.endAngle - slice.startAngle;
-        const angleOffset = Math.random() * angleSize;
-        return slice.startAngle + angleOffset;
-      } else {
-        rand -= p.qty;
-      }
-    }
-    // fallback
-    return slices[slices.length - 1].startAngle;
-  }
-
-  function awardPrize(prizeName) {
-    // Decrement stock
-    const p = config.prizes.find(x => x.name === prizeName && x.qty > 0);
-    let resultText = "谢谢参与";
-    if (p) {
-      p.qty--;
-      resultText = p.name;
-    }
-    // Mark user as used
-    userObj.usedDraws++;
-
-    // Save config
-    localStorage.setItem('lotteryConfig', JSON.stringify(config));
-
-    // Log
-    logDrawResult(userObj.id, resultText);
-
-    // Re-render wheel + legend
-    renderWheel();
-    renderLegend();
-
-    // Show result
-    resultMsg.textContent = `Congratulations! You won: ${resultText}`;
-  }
-
-  // Log draw result
-  function logDrawResult(userId, prizeName) {
-    // fetch IP from public API
-    fetch('https://api.ipify.org?format=json')
-      .then(r => r.json())
-      .then(data => {
-        const userIP = data.ip || 'unknown';
-        saveLog(userId, userIP, prizeName);
-      })
-      .catch(err => {
-        saveLog(userId, 'unknown', prizeName);
-      });
-  }
-  function saveLog(userId, ip, prizeName) {
-    const logsRaw = localStorage.getItem('lotteryLogs') || '[]';
-    const logs = JSON.parse(logsRaw);
-    logs.push({
-      user: userId,
-      ip: ip,
-      prize: prizeName,
-      time: new Date().toLocaleString()
-    });
-    localStorage.setItem('lotteryLogs', JSON.stringify(logs));
-  }
   </script>
 </body>
 </html>
+
